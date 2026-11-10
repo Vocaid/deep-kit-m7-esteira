@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "author": "VOCAID DEEP",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-mega", "id": "mega", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-slide-switch", "id": "rele_a", "top": -190, "left": 60, "attrs": { "label": "app aprovou (relé A)" } },
+    { "type": "wokwi-relay-module", "id": "rele_b", "top": -200, "left": 160, "attrs": {} },
+    { "type": "chip-esteira", "id": "esteira", "top": -200, "left": 480, "attrs": {} },
+    { "type": "wokwi-led", "id": "led_ok", "top": -130, "left": 330, "attrs": { "color": "green", "label": "OK" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": -70, "left": 320, "rotate": 90, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "led_alerta", "top": -130, "left": 380, "attrs": { "color": "red", "label": "ALERTA" } },
+    { "type": "wokwi-resistor", "id": "r2", "top": -70, "left": 370, "rotate": 90, "attrs": { "value": "220" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": -140, "left": 420, "attrs": { "volume": "0.1" } }
+  ],
+  "connections": [
+    [ "mega:1", "$serialMonitor:RX", "", [] ],
+    [ "mega:0", "$serialMonitor:TX", "", [] ],
+
+    [ "mega:5V", "rele_a:2", "red", [] ],
+    [ "rele_a:1", "rele_b:COM", "orange", [] ],
+    [ "rele_b:NO", "esteira:PWR", "orange", [] ],
+    [ "rele_b:VCC", "mega:5V", "red", [] ],
+    [ "rele_b:GND", "mega:GND.1", "black", [] ],
+    [ "rele_b:IN", "mega:7", "yellow", [] ],
+
+    [ "esteira:VCC", "mega:5V", "red", [] ],
+    [ "esteira:GND", "mega:GND.1", "black", [] ],
+    [ "esteira:OPT", "mega:2", "green", [] ],
+    [ "esteira:VIB", "mega:3", "purple", [] ],
+    [ "esteira:SOM", "mega:A0", "blue", [] ],
+
+    [ "mega:4", "led_ok:A", "green", [] ],
+    [ "led_ok:C", "r1:1", "black", [] ],
+    [ "r1:2", "mega:GND.1", "black", [] ],
+    [ "mega:5", "led_alerta:A", "red", [] ],
+    [ "led_alerta:C", "r2:1", "black", [] ],
+    [ "r2:2", "mega:GND.1", "black", [] ],
+    [ "mega:6", "buzzer:2", "orange", [] ],
+    [ "buzzer:1", "mega:GND.1", "black", [] ]
+  ],
+  "serialMonitor": { "display": "always" },
+  "dependencies": {}
+}

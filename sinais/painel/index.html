@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Painel de sinais — replay</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--fundo:#0e071a;--tinta:#f2f2f7;--realce:#7c3aed;--realce-2:#c084fc;
+      --ok:#34d399;--alerta:#f87171;--cinza:#9ca3af;
+      --incons:#fbbf24;--esperado:#60a5fa;--painel:#1a1030;--linha:#2a2140}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--fundo);color:var(--tinta);font:400 20px/1.35 "Avenir Next","Helvetica Neue",sans-serif;overflow:hidden}
+#banner{position:fixed;top:0;left:0;right:0;z-index:50;background:#dc2626;color:#fff;text-align:center;font-weight:800;font-size:26px;letter-spacing:.04em;padding:6px 12px;display:none}
+body.sim #banner{display:block}
+#app{height:100vh;display:grid;grid-template-rows:auto auto 1fr;gap:10px;padding:12px 28px 14px}
+body.sim #app{padding-top:calc(var(--bh,50px) + 10px)}
+header{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+h1{font-size:30px;color:var(--realce-2);margin-right:auto}
+h1 small{font-size:18px;color:var(--cinza);font-weight:400;margin-left:12px}
+button,select,.btn{font:600 20px "Avenir Next","Helvetica Neue",sans-serif;color:var(--tinta);background:var(--painel);border:2px solid var(--realce);border-radius:12px;padding:6px 16px;cursor:pointer}
+button:hover,.btn:hover{background:var(--realce)}
+button.on{background:var(--realce)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--realce-2);outline-offset:2px}
+#ctrl{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+#scrub{flex:1;min-width:240px;accent-color:var(--realce-2);height:28px}
+#tempo{min-width:150px;color:var(--cinza)}
+main{display:grid;grid-template-columns:1fr 520px;gap:18px;min-height:0}
+#esq{display:flex;flex-direction:column;gap:6px;min-height:0}
+.faixa{display:grid;grid-template-columns:230px 1fr;align-items:center;gap:10px;flex:1;min-height:0}
+.faixa.baixa{flex:0 0 auto}
+.rot{font-size:20px;color:var(--cinza);line-height:1.15}
+.rot b{display:block;color:var(--tinta);font-size:22px}
+svg{width:100%;height:100%;display:block;background:var(--painel);border-radius:8px}
+.lane svg,.trilha svg{height:46px}
+.trilha svg{height:34px}
+#card{background:var(--painel);border:3px solid var(--linha);border-radius:18px;padding:16px 20px;display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:0}
+#card h2{font-size:24px;color:var(--realce-2)}
+#card .jan{color:var(--cinza);font-size:19px}
+.campo{border-left:8px solid var(--linha);padding:2px 0 2px 14px}
+.campo h3{font-size:18px;color:var(--cinza);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.campo p{font-size:23px;overflow-wrap:anywhere}
+.campo.e{border-left-color:var(--realce)}
+#c-que.anomalia{border-left-color:var(--alerta)}
+#c-que.inconsistencia{border-left-color:var(--incons)}
+#c-que.evento_esperado{border-left-color:var(--esperado)}
+#c-que p{font-size:32px;font-weight:700}
+#c-que.anomalia p{color:var(--alerta)}
+#c-que.inconsistencia p{color:var(--incons)}
+#c-que.evento_esperado p{color:var(--esperado)}
+.peq{font-size:19px;color:var(--cinza)}
+#legenda{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:19px;color:var(--cinza)}
+#legenda i{display:inline-block;width:18px;height:18px;border-radius:4px;vertical-align:-3px;margin-right:6px}
+#tabela{position:fixed;inset:0;z-index:40;background:#0e071a;display:none;padding:70px 40px 30px;overflow:auto}
+#tabela.aberta{display:block}
+#tabela .caixa{max-width:1500px;margin:0 auto}
+#tabela h2{font-size:34px;color:var(--realce-2);margin-bottom:6px}
+table{border-collapse:collapse;width:100%;font-size:22px;margin:10px 0}
+th,td{padding:8px 14px;border-bottom:1px solid var(--linha);text-align:left}
+th{color:var(--realce-2)}
+td.sim{color:var(--ok);font-weight:700}td.nao{color:var(--alerta);font-weight:700}
+#tabela .legenda{color:var(--cinza);margin-top:8px}
+#msg{display:none;margin:auto;max-width:1100px;text-align:center;font-size:30px;padding:40px;border:4px solid var(--alerta);border-radius:20px;background:var(--painel)}
+#msg small{display:block;margin-top:14px;font-size:20px;color:var(--cinza)}
+body.recusa main,body.recusa #ctrl{display:none}
+body.recusa #msg{display:block}
+body.vazio main{display:none}
+#vazio{display:none;margin:auto;text-align:center;font-size:26px;color:var(--cinza)}
+body.vazio #vazio{display:block}
+.oculto{display:none}
+#c-falso{display:none;border:3px solid var(--alerta);border-radius:10px;padding:6px 12px;font-size:23px;font-weight:700;color:var(--alerta)}
+#c-que.longo p{font-size:25px}
+td.fa{color:var(--alerta);font-weight:700}
+@media (max-width:1150px){
+  body{overflow:auto}
+  #app{height:auto;min-height:100vh}
+  main{grid-template-columns:1fr}
+  .faixa{grid-template-columns:150px 1fr;min-height:70px}
+  .faixa.baixa{min-height:0}
+  #banner{font-size:20px}
+}
+</style>
+</head>
+<body class="vazio">
+<div id="banner" role="alert">SIMULADO — dados sintéticos, smoke test do pipeline. Não é prova de nada.</div>
+<div id="app">
+  <header>
+    <h1>Sinais da esteira<small id="sessao-nome"></small></h1>
+    <label class="btn" for="pasta" tabindex="0" id="lbl-pasta">Carregar sessão</label>
+    <input type="file" id="pasta" webkitdirectory multiple class="oculto">
+    <button id="bt-tabela" type="button">Tabela por evento (T)</button>
+  </header>
+  <div id="ctrl">
+    <button id="bt-play" type="button">▶ Tocar</button>
+    <button class="vel on" data-v="1" type="button">1×</button>
+    <button class="vel" data-v="5" type="button">5×</button>
+    <button class="vel" data-v="20" type="button">20×</button>
+    <label for="sel-epoca">Época</label>
+    <select id="sel-epoca"></select>
+    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Posição na época">
+    <span id="tempo"></span>
+  </div>
+  <div id="vazio">Escolha a pasta da sessão em “Carregar sessão”, ou abra com <code>?sessao=../sessoes/&lt;id&gt;</code> num servidor local.</div>
+  <div id="msg" role="alert"></div>
+  <main>
+    <section id="esq" aria-label="Sinais e faixas"></section>
+    <aside id="card" aria-live="polite">
+      <h2 id="c-titulo">Janela sob o cursor</h2>
+      <div class="jan" id="c-jan"></div>
+      <div class="campo" id="c-mudou"><h3>O que mudou</h3><p id="c-mudou-t"></p></div>
+      <div class="campo" id="c-esp"><h3>O que era esperado</h3><p id="c-esp-t"></p></div>
+      <div class="campo" id="c-que"><h3>O que é</h3><p id="c-que-t"></p></div>
+      <div id="c-falso"></div>
+      <div class="peq" id="c-extra"></div>
+      <div id="legenda"></div>
+    </aside>
+  </main>
+</div>
+<div id="tabela" role="dialog" aria-label="Tabela por evento"><div class="caixa" id="tab-corpo"></div></div>
+
+<script>
+"use strict";
+const ARQ_OBRIG = ["manifesto.json","sinais.csv"];   // detectores.jsonl é checado em montar() com mensagem própria
+const MSG_SEM_DET = "Esta sessão não tem detectores.jsonl — rode sinais/avaliar.py <pasta>";
+class ErroSessao extends Error {}
+const falha = m => { throw new ErroSessao(m); };
+function json(nome, txt){
+  let v; try{ v = JSON.parse(txt); }catch(e){ falha(nome + ": JSON inválido"); }
+  if(v === null || typeof v !== "object" || Array.isArray(v)) falha(nome + ": esperado um objeto JSON");
+  return v;
+}
+const ARQ_OPC = ["detectores.jsonl","rotulos.csv","eventos.csv","avaliacao.json"];
+const CANAIS = [
+  {k:"rpm",nome:"rpm",un:"giros/min"},
+  {k:"som_rms",nome:"som (rms)",un:""},
+  {k:"som_pico",nome:"som (pico)",un:""},
+  {k:"vib",nome:"vibração",un:"batidas/s"}
+];
+const COR = {anomalia:"#f87171", inconsistencia:"#fbbf24", evento_esperado:"#60a5fa", normal:"#34d399"};
+const NOME_CLASSE = {normal:"normal", anomalia:"anomalia", inconsistencia:"inconsistência", evento_esperado:"evento esperado"};
+const NOME_ROTULO = {n:"normal",a:"atrito (anomalia)",p:"palheta solta (inconsistência)",m:"microfone tampado (inconsistência)",
+  c:"câmera obstruída (inconsistência)",s:"parada pelo app (evento esperado)",r:"ruído da sala",x:"pós-disparo (fora da conta)"};
+const COR_ROTULO = {a:COR.anomalia,p:COR.inconsistencia,m:COR.inconsistencia,c:COR.inconsistencia,s:COR.evento_esperado,n:"#94a3b8",r:"#d6c7a1"};
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const params = new URLSearchParams(location.search);
+const MODO_AULA = params.get("aula") === "1";
+
+let S = null;            // sessão carregada
+let epoca = 0, idx = 0;  // época atual (índice em S.epocas) e janela atual
+let tocando = false, vel = 1, ultimo = 0, acum = 0;
+
+/* ---------- leitura ---------- */
+function csv(txt){
+  const linhas = [];
+  let cur = [], campo = "", asp = false;
+  for(let i=0;i<txt.length;i++){
+    const c = txt[i];
+    if(asp){
+      if(c === '"'){ if(txt[i+1] === '"'){campo += '"'; i++;} else asp = false; }
+      else campo += c;
+    } else if(c === '"') asp = true;
+    else if(c === ","){ cur.push(campo); campo = ""; }
+    else if(c === "\n"){ cur.push(campo); linhas.push(cur); cur = []; campo = ""; }
+    else if(c !== "\r") campo += c;
+  }
+  if(campo !== "" || cur.length){ cur.push(campo); linhas.push(cur); }
+  const cab = (linhas.shift() || []).map(h => h.trim());
+  return {cab, linhas: linhas.filter(l => l.length > 1 || l[0] !== "").map(l => Object.fromEntries(cab.map((h,i)=>[h,l[i]])))};
+}
+const num = v => (v === undefined || v === "" || v === "None" || v === "nan") ? null : Number(v);
+
+async function lerFetch(base){
+  const u = new URL(base.endsWith("/") ? base : base + "/", location.href);
+  if(u.origin !== location.origin) falha("A sessão precisa estar no mesmo servidor local (nenhum pedido externo).");
+  const out = {};
+  for(const nome of ARQ_OBRIG.concat(ARQ_OPC)){
+    let r;
+    try{ r = await fetch(new URL(nome, u)); }catch(e){ falha("Não consegui abrir " + nome + " (o servidor local está no ar?)"); }
+    if(r.ok) out[nome] = await r.text();
+    else if(ARQ_OBRIG.includes(nome)) falha("Arquivo ausente na sessão: " + nome);
+  }
+  return {arquivos: out, nome: base};
+}
+async function lerPasta(files){
+  const out = {}; let nome = "";
+  for(const f of files){
+    const partes = (f.webkitRelativePath || f.name).split("/");
+    const n = partes[partes.length-1];
+    if(partes.length > 1 && partes[partes.length-2] && !nome) nome = partes[partes.length-2];
+    if(ARQ_OBRIG.includes(n) || ARQ_OPC.includes(n)) out[n] = await f.text();
+  }
+  for(const n of ARQ_OBRIG) if(!(n in out)) falha("Arquivo ausente na pasta escolhida: " + n);
+  return {arquivos: out, nome};
+}
+
+function montar({arquivos, nome}){
+  const man = json("manifesto.json", arquivos["manifesto.json"]);
+  const simulado = man.simulado === true;
+  // Modo aula: só aceita sessão que declara simulado === false. Fecha por padrão.
+  if(MODO_AULA && man.simulado !== false){
+    return {recusada:true, simulado, nome};
+  }
+  const tabela_csv = (nome, txt, obrig) => {
+    const lin = csv(txt);
+    if(!lin.cab.length || obrig.some(h => !lin.cab.includes(h))) falha(nome + ": vazio ou sem cabeçalho (esperado: " + obrig.join(",") + ")");
+    return lin.linhas;
+  };
+  const sin = tabela_csv("sinais.csv", arquivos["sinais.csv"], ["t_s","epoca","janela_mega","rpm","som_rms","som_pico","vib"]);
+  if(!sin.length) falha("sinais.csv: sem linhas de dados");
+  sin.forEach((l,i) => { if(!Number.isFinite(Number(l.epoca)) || l.epoca === "" || !Number.isFinite(Number(l.janela_mega)) || l.janela_mega === "") falha("sinais.csv: linha " + (i+2) + " inválida"); });
+  if(!arquivos["detectores.jsonl"] || !arquivos["detectores.jsonl"].trim()) falha(MSG_SEM_DET);
+  const det = [];
+  arquivos["detectores.jsonl"].split("\n").forEach((l,i) => {
+    if(!l.trim()) return;
+    let o; try{ o = JSON.parse(l); }catch(e){ falha("detectores.jsonl: linha " + (i+1) + " inválida"); }
+    if(o === null || typeof o !== "object" || !("epoca" in o) || !("janela_mega" in o)) falha("detectores.jsonl: linha " + (i+1) + " inválida");
+    det.push(o);
+  });
+  if(!det.length) falha(MSG_SEM_DET);
+  const porChave = new Map(det.map(d => [d.epoca + ":" + d.janela_mega, d]));
+  const epocas = new Map();
+  for(const l of sin){
+    const e = Number(l.epoca), j = Number(l.janela_mega);
+    const d = porChave.get(e + ":" + j) || null;
+    const w = {t_s:num(l.t_s), epoca:e, j, rpm:num(l.rpm), som_rms:num(l.som_rms), som_pico:num(l.som_pico), vib:num(l.vib),
+               score:num(l.score_mega), estado:l.estado_mega, d};
+    if(!epocas.has(e)) epocas.set(e, []);
+    epocas.get(e).push(w);
+  }
+  const lista = [...epocas.keys()].sort((a,b)=>a-b).map(e => ({epoca:e, w:epocas.get(e)}));
+  const aval = arquivos["avaliacao.json"] ? json("avaliacao.json", arquivos["avaliacao.json"]) : null;
+  const eventos = arquivos["eventos.csv"] ? tabela_csv("eventos.csv", arquivos["eventos.csv"], ["t_s","epoca","texto"]).map((r,i) => {
+    if(!Number.isFinite(Number(r.epoca)) || !Number.isFinite(Number(r.t_s))) falha("eventos.csv: linha " + (i+2) + " inválida");
+    return {epoca:Number(r.epoca), t_s:Number(r.t_s), texto:r.texto}; }) : [];
+  const infoEpoca = new Map(((aval && aval.epocas) || []).map(x => [x.epoca, x]));
+  return {recusada:false, simulado, man, nome, epocas:lista, aval, eventos, infoEpoca};
+}
+
+/* ---------- desenho ---------- */
+function el(tag, attrs, pai){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  if(pai) pai.appendChild(e);
+  return e;
+}
+let G = null; // referências do desenho atual
+function desenharEpoca(){
+  const ep = S.epocas[epoca].w, n = ep.length;
+  const esq = $("esq"); esq.textContent = "";
+  G = {n, linhas:[], clips:[], cursores:[], lanes:{mega:[], ia:[]}, trilha:[]};
+  const W = 1000, dx = W / n;
+  const x = i => i * dx;
+  const mkFaixa = (rotHtml, classe) => {
+    const f = document.createElement("div"); f.className = "faixa " + (classe||"");
+    const r = document.createElement("div"); r.className = "rot"; r.innerHTML = rotHtml;
+    const c = document.createElement("div");
+    f.append(r, c); esq.appendChild(f); return c;
+  };
+  CANAIS.forEach((ch, ci) => {
+    const c = mkFaixa("<b>"+ch.nome+"</b><span id='v-"+ch.k+"'></span>");
+    const H = 90, vals = ep.map(w => w[ch.k]).filter(v => v !== null);
+    const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi-lo||1)*0.12;
+    const y = v => H - 6 - ((v - (lo-pad)) / ((hi+pad)-(lo-pad))) * (H-12);
+    const svg = el("svg", {viewBox:`0 0 ${W} ${H}`, preserveAspectRatio:"none", role:"img", "aria-label":"série de "+ch.nome});
+    c.appendChild(svg);
+    let d = "", pen = false;
+    ep.forEach((w,i) => { if(w[ch.k] === null){pen=false;return;} d += (pen?"L":"M") + (x(i)+dx/2).toFixed(1) + " " + y(w[ch.k]).toFixed(1); pen=true; });
+    el("path", {d, fill:"none", stroke:"#8b7aa8", "stroke-width":4, "vector-effect":"non-scaling-stroke"}, svg);
+    const id = "clip" + ci;
+    const cp = el("clipPath", {id}, svg), cr = el("rect", {x:0, y:0, width:0, height:H}, cp);
+    el("path", {d, fill:"none", stroke:"var(--realce-2)", "stroke-width":5, "clip-path":`url(#${id})`, "vector-effect":"non-scaling-stroke"}, svg);
+    const cur = el("line", {x1:0,x2:0,y1:0,y2:H,stroke:"#fff","stroke-width":2,"vector-effect":"non-scaling-stroke"}, svg);
+    G.clips.push(cr); G.cursores.push(cur);
+    svg.addEventListener("click", ev => { const r = svg.getBoundingClientRect(); ir(Math.min(n-1, Math.max(0, Math.floor((ev.clientX-r.left)/r.width*n)))); });
+  });
+  // trilha de rótulos
+  const ct = mkFaixa("<b>Marcação humana</b>", "baixa trilha");
+  const st = el("svg", {viewBox:`0 0 ${W} 34`, preserveAspectRatio:"none", role:"img", "aria-label":"trilha de rótulos"}, ct);
+  const defs = el("defs", {}, st);
+  const pat = el("pattern", {id:"hach", width:10, height:10, patternUnits:"userSpaceOnUse", patternTransform:"rotate(45)"}, defs);
+  el("rect", {width:10, height:10, fill:"#2a2140"}, pat); el("rect", {width:4, height:10, fill:"#6b7280"}, pat);
+  ep.forEach((w,i) => {
+    const r = w.d ? w.d.rotulo : null;
+    const f = r === "x" ? "url(#hach)" : (r ? COR_ROTULO[r] : "#241a3a");
+    const re = el("rect", {x:x(i), y:0, width:dx+0.5, height:34, fill:f}, st);
+    re.appendChild(document.createElementNS(NS,"title")).textContent = "janela "+w.j+": "+(r ? (NOME_ROTULO[r]||r) : "sem marcação ainda");
+    G.trilha.push(re);
+  });
+  const tcur = el("line", {x1:0,x2:0,y1:0,y2:34,stroke:"#fff","stroke-width":2,"vector-effect":"non-scaling-stroke"}, st);
+  G.cursores.push(tcur);
+  // duas faixas de detector
+  const lane = (chave, rotulo, sub) => {
+    const c = mkFaixa("<b>"+rotulo+"</b>"+sub, "baixa lane");
+    const sv = el("svg", {viewBox:`0 0 ${W} 46`, preserveAspectRatio:"none", role:"img", "aria-label":rotulo}, c);
+    ep.forEach((w,i) => G.lanes[chave].push(el("rect", {x:x(i)+0.5, y:4, width:Math.max(dx-1,1), height:38, rx:3, fill:"#241a3a"}, sv)));
+    G.cursores.push(el("line", {x1:0,x2:0,y1:0,y2:46,stroke:"#fff","stroke-width":2,"vector-effect":"non-scaling-stroke"}, sv));
+  };
+  lane("mega", "o Mega (estatística)", "alerta do firmware");
+  lane("ia", "IA no laptop", "cor = o que é");
+  const lg = $("legenda");
+  lg.innerHTML = [["anomalia",COR.anomalia],["inconsistência",COR.inconsistencia],["evento esperado",COR.evento_esperado],
+    ["normal (n)","#94a3b8"],["ruído da sala (r)","#d6c7a1"],["Mega alertou","var(--realce-2)"]]
+    .map(([t,c]) => `<span><i style="background:${c}"></i>${t}</span>`).join("") +
+    `<span><i style="background:repeating-linear-gradient(45deg,#6b7280 0 3px,#2a2140 3px 6px)"></i>pós-disparo (fora da conta) / não avaliada</span>` +
+    `<span><i style="background:#3d2f10;border:1px dashed #b45309"></i>sem baseline</span>`;
+}
+
+function classeDe(w){ return w.d && w.d.classe_final ? w.d.classe_final : null; }
+function atualizar(){
+  const ep = S.epocas[epoca].w, n = G.n, W = 1000, dx = W/n;
+  const cx = (idx + 0.5) * dx;
+  G.clips.forEach(c => c.setAttribute("width", ((idx+1)*dx).toFixed(1)));
+  G.cursores.forEach(c => { c.setAttribute("x1", cx); c.setAttribute("x2", cx); });
+  const info = S.infoEpoca.get(S.epocas[epoca].epoca);
+  ep.forEach((w,i) => {
+    const vis = i <= idx, op = vis ? 1 : 0.1;
+    G.trilha[i].setAttribute("opacity", vis ? 1 : 0.08);
+    const m = G.lanes.mega[i], a = G.lanes.ia[i];
+    m.setAttribute("opacity", op); a.setAttribute("opacity", op);
+    m.setAttribute("fill", w.d && w.d.mega ? "var(--realce-2)" : "#241a3a");
+    const c = classeDe(w);
+    const semBase = !!(w.d && w.d.ia && w.d.ia.avaliada === false), pos = !!(w.d && w.d.pos_disparo);
+    a.setAttribute("fill", semBase ? "#3d2f10" : pos ? "#2a2140" : c ? (COR[c] || "#9ca3af") : (w.d && w.d.ia === null ? "#2a2140" : "#241a3a"));
+    a.setAttribute("stroke", semBase ? "#b45309" : pos || (w.d && w.d.ia === null) ? "#4b5563" : "none");
+    a.setAttribute("stroke-dasharray", "3 3");
+    const tt = a.querySelector("title") || a.appendChild(document.createElementNS(NS,"title"));
+    tt.textContent = "janela " + w.j + ": " + (semBase ? "IA: sem baseline (menos de 15 janelas normais)" : pos ? "pós-disparo (relé B cortou o motor): fora da conta" : w.d && w.d.ia ? "IA (sem contexto): " + (NOME_CLASSE[w.d.ia.classe]||w.d.ia.classe) + " · final: " + (NOME_CLASSE[w.d.classe_final]||w.d.classe_final) : "IA não avaliou");
+  });
+  const w = ep[idx];
+  CANAIS.forEach(ch => { const e = $("v-"+ch.k); if(e) e.textContent = w[ch.k] === null ? "ausente" : w[ch.k] + (ch.un ? " " + ch.un : ""); });
+  $("tempo").textContent = "t = " + w.t_s.toFixed(0) + " s · janela " + w.j + "/" + n;
+  $("scrub").value = idx;
+  cartao(w, info);
+}
+
+function cartao(w, info){
+  const d = w.d;
+  $("c-titulo").textContent = "Época " + w.epoca + " · janela " + w.j;
+  const rot = d && d.rotulo;
+  $("c-jan").textContent = "t = " + w.t_s.toFixed(0) + " s · marcação: " + (rot ? (NOME_ROTULO[rot]||rot) : "ainda sem marcação");
+  let mudou, esperado, que, cls = "";
+  const ia = d ? d.ia : null;
+  const semBase = !!(ia && ia.avaliada === false), pos = !!(d && d.pos_disparo);
+  if(semBase){
+    mudou = "nada para comparar";
+    esperado = "sem baseline: a IA precisa de pelo menos 15 janelas normais depois da calibração (n, ou sem marcação)";
+    que = "sem baseline";
+  } else if(ia){
+    mudou = ia.classe === "normal" || !ia.por_que ? "nada fora do normal" : ia.por_que;
+    esperado = info ? "baseline: média e desvio de " + info.baseline_n + " janelas normais (até a janela " + info.baseline_ate_janela + ")" : "baseline desta época";
+    cls = d.classe_final || ia.classe || "normal";
+  } else {
+    const aus = d && d.saude && d.saude.canal_ausente || [];
+    const ate = info ? info.baseline_ate_janela : null;
+    mudou = "nada fora do normal";
+    if(aus.length){ esperado = "canal ausente: " + aus.join(", "); que = "sem classificação"; }
+    else if(info && info.baseline_insuficiente){ esperado = "baseline insuficiente: poucas janelas normais marcadas"; que = "sem classificação"; }
+    else { esperado = "calibrando / baseline" + (ate ? " (a IA só avalia depois da janela " + ate + ")" : ""); que = "ainda não avaliado"; }
+    if(d && d.classe_final){ cls = d.classe_final; }
+  }
+  if(cls) que = NOME_CLASSE[cls] || cls;
+  if(pos) que = "pós-disparo (relé B cortou o motor)";
+  if(pos) mudou = "motor parado pelo relé B (janela pós-disparo)";
+  $("c-mudou-t").textContent = mudou;
+  $("c-esp-t").textContent = esperado;
+  const nc = c => NOME_CLASSE[c] || c;
+  const ctxNome = rot ? (NOME_ROTULO[rot]||rot).replace(/ \(.*\)/,"") : "contexto";
+  const recl = !semBase && !pos && ia && ia.classe && d.classe_final && ia.classe !== d.classe_final;
+  if(recl) que = nc(d.classe_final) + " — a IA marcou " + nc(ia.classe) + "; o contexto (" + ctxNome + ") reclassificou";
+  $("c-que-t").textContent = que;
+  $("c-que").className = "campo " + (pos || semBase ? "" : cls || "") + (recl || pos || que.length > 24 ? " longo" : "");
+  const alarmou = d && !semBase && !pos && ((d.mega) || (ia && ia.disparou) || (cls && cls !== "normal"));
+  const fa = $("c-falso");
+  if(rot && (rot === "n" || rot === "r") && alarmou){
+    que = (cls && cls !== "normal" ? nc(cls) : "alerta do Mega") + " (falso alarme)";
+    $("c-que-t").textContent = que;
+    $("c-que").className = "campo " + (cls || "") + " longo";
+    fa.style.display = "block";
+    fa.textContent = "falso alarme: " + (rot === "r" ? "ruído da sala" : "janela marcada normal");
+  } else fa.style.display = "none";
+  const mg = d ? (d.mega ? "alertou" : "quieto") : "—";
+  const extra = ["Mega: " + mg + " (" + (w.estado||"?") + ", score " + (w.score===null?"?":w.score) + ")"];
+  if(ia && !semBase) extra.push("IA (sem contexto): " + nc(ia.classe));
+  // rpm e vib repetem valores normalmente (1 pulso por volta, KY-002 lendo 0); so o som travado e' sinal de sensor
+  const trav = d && d.saude && d.saude.valor_travado ? d.saude.valor_travado.filter(c => c.startsWith("som")) : [];
+  if(trav.length) extra.push("valor travado: " + trav.join(", "));
+  const ev = S.eventos.filter(e => e.epoca === w.epoca && e.t_s <= w.t_s && w.t_s - e.t_s <= 5).pop();
+  if(ev) extra.push("último evento: " + ev.texto);
+  $("c-extra").textContent = extra.join(" · ");
+}
+
+/* ---------- tabela por evento ---------- */
+function tabela(){
+  const a = S.aval, c = $("tab-corpo");
+  if(!a){ c.innerHTML = "<h2>Tabela por evento</h2><p>Esta sessão não tem avaliacao.json. Rode sinais/avaliar.py.</p>"; return; }
+  const sn = v => v ? '<td class="sim">sim</td>' : '<td class="nao">não</td>';
+  const dl = (ok, at) => ok ? (at === null || at === undefined ? "—" : at + (at === 1 ? " janela" : " janelas")) : "—";
+  const lin = (a.eventos||[]).map(e => {
+    const m = e.mega || {}, i = e.ia || {};
+    if(e.excluido) return `<tr><td>${e.rotulo} · ${(NOME_ROTULO[e.rotulo]||"").replace(/ \(.*\)/,"")}</td><td>${e.epoca}</td><td class="nao" colspan="5">${e.resultado}</td></tr>`;
+    return `<tr><td>${e.rotulo} · ${(NOME_ROTULO[e.rotulo]||"").replace(/ \(.*\)/,"")}</td><td>${e.epoca}</td>`+
+      `${sn(m.detectado)}<td>${dl(m.detectado,m.atraso)}</td>${i.avaliou === false ? '<td class="nao" colspan="2">não avaliou (sem baseline)</td>' : sn(i.detectado)+'<td>'+dl(i.detectado,i.atraso)+'</td>'}`+
+      `<td>${NOME_CLASSE[e.classe_final]||e.classe_final||"—"}</td></tr>`;
+  }).join("");
+  const conta = o => o ? Object.entries(o).map(([k,v]) => v+"× "+(NOME_CLASSE[k]||k)).join(", ") : "—";
+  const ctx = (a.segmentos_contexto || []).map(g => {
+    const fa = (g.rotulo === "n" || g.rotulo === "r");
+    const alm = n => n + "/" + g.janelas + " janelas alarmadas antes do disparo" + (fa && n > 0 ? " — <b>falso alarme</b>" : "");
+    return `<tr><td>${g.rotulo} · ${(NOME_ROTULO[g.rotulo]||"").replace(/ \(.*\)/,"")}</td><td>${g.epoca}</td>`+
+      `<td colspan="2" class="${fa&&g.mega_alarmes>0?"fa":""}">${alm(g.mega_alarmes)}</td><td colspan="2" class="${fa&&g.ia_alarmes>0?"fa":""}">${alm(g.ia_alarmes)}</td>`+
+      `<td>${conta(g.classe_final)}</td></tr>`;
+  }).join("");
+  c.innerHTML = `<h2>Tabela por evento</h2>`+
+    `<table><thead><tr><th>Rótulo</th><th>Época</th><th>Mega detectou</th><th>Atraso</th><th>IA detectou</th><th>Atraso</th><th>Classe final (IA)</th></tr></thead><tbody>${lin}${ctx ? `<tr><th colspan="7" style="color:var(--cinza);font-weight:600">Eventos de contexto (fora da conta de detecção): janelas alarmadas</th></tr>${ctx}` : ""}</tbody></table>`+
+    `<p class="legenda">uma sessão, um motor, uma pessoa marcando</p>`+
+    (S.simulado ? `<p class="legenda" style="color:var(--alerta)">${a.aviso||"SIMULADO"}</p>` : "");
+}
+
+/* ---------- controle ---------- */
+function ir(i){ idx = Math.max(0, Math.min(G.n-1, i)); atualizar(); }
+function trocarEpoca(i){
+  epoca = i; idx = 0; parar();
+  $("sel-epoca").value = i;
+  $("scrub").max = S.epocas[i].w.length - 1;
+  desenharEpoca(); atualizar();
+}
+function parar(){ tocando = false; $("bt-play").textContent = "▶ Tocar"; }
+function alternar(){
+  if(!S || S.recusada) return;
+  if(tocando){ parar(); return; }
+  if(idx >= G.n-1) idx = 0;
+  tocando = true; ultimo = performance.now(); acum = 0; $("bt-play").textContent = "⏸ Pausar";
+  requestAnimationFrame(quadro);
+}
+function quadro(t){
+  if(!tocando) return;
+  acum += (t - ultimo) * vel / 1000; ultimo = t;   // 1 janela = 1 s de gravação
+  while(acum >= 1 && idx < G.n-1){ idx++; acum -= 1; }
+  atualizar();
+  if(idx >= G.n-1){ parar(); return; }
+  requestAnimationFrame(quadro);
+}
+
+function iniciar(dados){
+  parar();
+  $("tabela").classList.remove("aberta");
+  document.body.classList.remove("vazio","recusa");
+  S = montar(dados);
+  document.body.classList.toggle("sim", !!S.simulado);
+  fitBanner();
+  $("sessao-nome").textContent = S.nome || "";
+  if(S.recusada){
+    document.body.classList.add("recusa");
+    $("msg").innerHTML = "Sessão simulada recusada no modo aula (?aula=1).<small>Os dados desta sessão são sintéticos (manifesto: simulado). Em sala, use uma gravação real, ou abra sem ?aula=1 para um teste.</small>";
+    $("esq").textContent = ""; return;
+  }
+  const sel = $("sel-epoca"); sel.textContent = "";
+  S.epocas.forEach((e,i) => sel.add(new Option("Época " + e.epoca + " (" + e.w.length + " janelas)", i)));
+  tabela();
+  trocarEpoca(0);
+}
+function erro(e){
+  const m = e instanceof ErroSessao ? e.message : "Erro inesperado ao ler a sessão. Confira os arquivos da pasta e rode sinais/avaliar.py <pasta>.";
+  parar(); S = null;
+  document.body.classList.remove("vazio"); document.body.classList.add("recusa");
+  document.body.classList.remove("sim");
+  $("msg").textContent = m; $("esq").textContent = "";
+}
+
+$("pasta").addEventListener("change", async ev => {
+  try{ iniciar(await lerPasta([...ev.target.files])); }catch(e){ erro(e); }
+});
+$("lbl-pasta").addEventListener("keydown", ev => { if(ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); $("pasta").click(); } });
+$("bt-play").addEventListener("click", alternar);
+$("bt-tabela").addEventListener("click", () => $("tabela").classList.toggle("aberta"));
+$("tabela").addEventListener("click", ev => { if(ev.target === $("tabela")) $("tabela").classList.remove("aberta"); });
+$("sel-epoca").addEventListener("change", ev => trocarEpoca(Number(ev.target.value)));
+$("scrub").addEventListener("input", ev => { parar(); ir(Number(ev.target.value)); });
+document.querySelectorAll(".vel").forEach(b => b.addEventListener("click", () => {
+  vel = Number(b.dataset.v); document.querySelectorAll(".vel").forEach(x => x.classList.toggle("on", x === b));
+}));
+document.addEventListener("keydown", ev => {
+  if(!S || S.recusada || ev.target.tagName === "SELECT") return;
+  if(ev.key === " "){ ev.preventDefault(); alternar(); }
+  else if(ev.key === "ArrowRight"){ ev.preventDefault(); parar(); ir(idx+1); }
+  else if(ev.key === "ArrowLeft"){ ev.preventDefault(); parar(); ir(idx-1); }
+  else if(ev.key === "t" || ev.key === "T"){ $("tabela").classList.toggle("aberta"); }
+  else if(ev.key === "Escape"){ $("tabela").classList.remove("aberta"); }
+});
+
+const fitBanner = () => document.documentElement.style.setProperty("--bh", $("banner").offsetHeight + "px");
+fitBanner(); addEventListener("resize", fitBanner);
+const rel = params.get("sessao");
+if(rel){
+  lerFetch(rel).then(iniciar).catch(erro);
+} else if(MODO_AULA){
+  document.body.classList.remove("vazio");
+}
+</script>
+</body>
+</html>

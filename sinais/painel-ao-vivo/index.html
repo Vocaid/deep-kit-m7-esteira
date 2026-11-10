@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M7 · sinais ao vivo</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --fg:#e8e6e1; --mut:#8a8f98; --linha:#2a2e38;
+          --rpm:#378add; --vib:#7f77dd; --som:#1d9e75; --on:#ef9f27; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system, "Segoe UI", sans-serif; }
+  header { padding:16px 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--linha); }
+  h1 { font-size:18px; font-weight:600; margin:0; }
+  .chip { font-size:12px; padding:2px 10px; border-radius:999px; border:1px solid var(--linha); color:var(--mut); }
+  .chip.m7 { color:#9fc7f0; border-color:#378add; }
+  .chip.diag { color:#f5c27a; border-color:#ba7517; }
+  #estado { color:var(--mut); font-size:13px; }
+  main { padding:16px 20px; display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
+  .card { background:var(--card); border:1px solid var(--linha); border-radius:12px; padding:14px 16px; transition:border-color .15s, box-shadow .15s; min-width:0; }
+  .card.ativo { border-color:var(--on); box-shadow:0 0 0 2px var(--on) inset; }
+  .card.largo { grid-column:1 / -1; }
+  .topo { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .nome { font-weight:600; }
+  .pino { color:var(--mut); font-size:13px; }
+  .grande { font-size:40px; font-weight:600; font-variant-numeric:tabular-nums; margin:4px 0 0; }
+  .sub { color:var(--mut); font-size:13px; font-variant-numeric:tabular-nums; min-height:20px; }
+  canvas { width:100%; display:block; margin-top:8px; }
+  canvas.g { height:110px; }
+  #tl { height:250px; }
+  .dica { color:var(--mut); font-size:13px; margin-top:6px; }
+  .saidas { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; margin:12px 0; }
+  .saida { display:flex; align-items:center; gap:10px; }
+  .saida small { color:var(--mut); }
+  .luz { width:18px; height:18px; border-radius:50%; background:#2a2e38; border:1px solid #3a3f4b; flex:none; }
+  .luz.on { background:var(--on); border-color:var(--on); }
+  .luz.verde.on { background:#3fbf6a; border-color:#3fbf6a; }
+  .luz.verm.on { background:#e24b4a; border-color:#e24b4a; }
+  .luz.pisca { animation: pisca 1s steps(2) infinite; }
+  @keyframes pisca { 50% { opacity:.25; } }
+  button, a.botao { background:#2a2e38; color:var(--fg); border:1px solid #3a3f4b; border-radius:8px; padding:6px 12px; font:inherit; font-size:13px; cursor:pointer; margin:0 6px 6px 0; text-decoration:none; display:inline-block; }
+  button:hover:not(:disabled), a.botao:hover { border-color:var(--on); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.sel { border-color:var(--on); color:var(--on); }
+  #log { font:12px/1.6 ui-monospace, Menlo, monospace; color:var(--mut); max-height:220px; overflow:auto; margin:8px 0 0; padding:0; list-style:none; }
+  #log li.alerta { color:#e24b4a; } #log li.suspeita { color:#f5c27a; } #log li.ok { color:#3fbf6a; } #log li.cmd { color:#9fc7f0; }
+  footer { padding:0 20px 20px; color:var(--mut); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>M7 · sinais ao vivo</h1>
+  <span class="chip" id="modo">sem dados</span>
+  <span id="estado">conectando…</span>
+  <span class="chip" id="detector" title="Pinos digitais livres que mudaram de nível nos últimos 2 s (só no diag_ao_vivo)">detector de pinos: —</span>
+</header>
+<main>
+  <section class="card largo" id="c-tl">
+    <div class="topo">
+      <span class="nome">Linha do tempo</span>
+      <span>
+        <button data-jan="60000">1 min</button><button data-jan="300000" class="sel">5 min</button><button data-jan="900000">15 min</button><button data-jan="3600000">60 min</button>
+      </span>
+    </div>
+    <canvas id="tl"></canvas>
+    <div class="sub" id="s-tl"></div>
+  </section>
+  <section class="card" id="c-rpm">
+    <div class="topo"><span class="nome">Rotação (KY-033 / KY-010)</span><span class="pino">D2</span></div>
+    <div class="grande" id="v-rpm">0</div>
+    <div class="sub" id="s-rpm"></div>
+    <canvas class="g" id="g-rpm"></canvas>
+    <div class="dica">Passe a mão ou um papel na frente do sensor.</div>
+  </section>
+  <section class="card" id="c-vib">
+    <div class="topo"><span class="nome">Vibração (KY-002, mola)</span><span class="pino">D3</span></div>
+    <div class="grande" id="v-vib">0</div>
+    <div class="sub" id="s-vib"></div>
+    <canvas class="g" id="g-vib"></canvas>
+    <div class="dica">Bata firme na protoboard ao lado do módulo ou sacuda o módulo.</div>
+  </section>
+  <section class="card" id="c-som">
+    <div class="topo"><span class="nome">Som (KY-037 AO)</span><span class="pino">A0</span></div>
+    <div class="grande" id="v-som">0</div>
+    <div class="sub" id="s-som"></div>
+    <canvas class="g" id="g-som"></canvas>
+    <div class="dica">Palmas seguidas ou voz perto do microfone. O DO do KY-037 fica sem fio.</div>
+  </section>
+  <section class="card" id="c-saidas">
+    <div class="topo"><span class="nome">Saídas (o Mega comanda)</span><span class="pino">D7 · D4 · D5 · D6</span></div>
+    <div class="saidas">
+      <div class="saida"><span class="luz" id="o-rele"></span>Relé B <small>D7</small></div>
+      <div class="saida"><span class="luz verde" id="o-led4"></span>LED verde <small>D4</small></div>
+      <div class="saida"><span class="luz verm" id="o-led5"></span>LED vermelho <small>D5</small></div>
+      <div class="saida"><span class="luz amb" id="o-buz"></span>Buzzer <small>D6</small></div>
+    </div>
+    <div class="sub" id="s-saidas"></div>
+    <button id="testar">Testar saídas (3 s)</button>
+    <button id="tom">Testar tom no buzzer</button>
+    <div class="dica" id="d-saidas"></div>
+  </section>
+  <section class="card" id="c-log">
+    <div class="topo"><span class="nome">Mensagens e comandos</span><span><a class="botao" href="/baixar" id="baixar">Baixar registro</a></span></div>
+    <div class="sub" id="s-sessao"></div>
+    <ul id="log"></ul>
+  </section>
+</main>
+<footer>Fonte: serial do Mega via <code>ponte.py</code> (localhost). Tudo é gravado em <code>sinais/sessoes/painel/</code> e recuperado ao recarregar a página. Lê o firmware da aula (1 linha/s) e o <code>diag_ao_vivo</code> (20 linhas/s). Cartão em laranja = o sensor mexeu agora.</footer>
+<script>
+const $ = id => document.getElementById(id);
+const N = 600;                                     // pontos por gráfico (1 min no diagnóstico, 10 min no firmware da aula)
+const series = { rpm: [], vib: [], som: [] };
+const ultAtiv = { rpm: 0, vib: 0, som: 0 };
+const total = { rpm: 0, vib: 0 };
+const cor = { rpm: '#378add', vib: '#7f77dd', som: '#1d9e75' };
+const tl = [];                                     // linha do tempo: {t, rpm, vib, som, rele, l4, l5, buz, estado}
+const marcas = [];                                 // {t, texto, classe}
+const TL_MAX = 72000;                              // pontos guardados no navegador (1 h a 20 Hz)
+let janelaTl = 300000;
+let modo = null, ultimaLinha = 0, ultimoT = 0;
+
+function push(k, v) { const s = series[k]; s.push(v); if (s.length > N) s.shift(); }
+function marca(k, cond, t) { if (cond) ultAtiv[k] = t; }
+function tlPush(r) { tl.push(r); if (tl.length > TL_MAX) tl.splice(0, tl.length - TL_MAX); }
+
+function setModo(m) {
+  if (modo === m) return;
+  modo = m;
+  for (const k in series) series[k].length = 0;
+  const diag = m === 'diag';
+  $('modo').textContent = diag ? 'diagnóstico (diag_ao_vivo)' : 'firmware da aula';
+  $('modo').className = 'chip ' + (diag ? 'diag' : 'm7');
+  $('testar').disabled = !diag; $('tom').disabled = !diag;
+  $('d-saidas').textContent = diag
+    ? 'Testar: o relé fecha 1 s (clique), os LEDs alternam e o buzzer dá 3 bipes. Sem motor no contato do relé.'
+    : 'No firmware da aula as saídas são deduzidas do estado. Para testar relé e buzzer, grave o diag_ao_vivo.';
+}
+
+function saidas(rele, verde, verm, buz, piscaVerde) {
+  $('o-rele').classList.toggle('on', !!rele);
+  $('o-led4').classList.toggle('on', !!verde); $('o-led4').classList.toggle('pisca', !!piscaVerde);
+  $('o-led5').classList.toggle('on', !!verm);
+  $('o-buz').classList.toggle('on', !!buz);
+}
+
+// ---- firmware da aula: janela,rpm,som_rms,som_pico,vib,score,estado (1 por segundo) ----
+const RE_M7 = /^(\d+),(\d+),([\d.]+),(\d+),(\d+),([\d.]+),([A-Z]+)$/;
+function processaM7(m, t, ao) {
+  setModo('m7');
+  const [, jan, rpm, rms, pico, vib, score, estado] = m;
+  push('rpm', +rpm); push('vib', +vib); push('som', +pico);
+  marca('rpm', +rpm > 0, t); marca('vib', +vib > 0, t); marca('som', +pico > 4, t);
+  const rele = estado !== 'SUSPEITA' && estado !== 'ALERTA', alerta = estado === 'ALERTA';
+  tlPush({ t, d: 1000, rpm: +rpm > 0, vib: +vib > 0, som: +pico > 4, rele, l4: !alerta, l5: alerta, buz: alerta, estado });
+  if (!ao) return;
+  $('v-rpm').textContent = rpm; $('s-rpm').textContent = 'rpm na janela ' + jan;
+  $('v-vib').textContent = vib; $('s-vib').textContent = 'bordas na janela ' + jan;
+  $('v-som').textContent = pico; $('s-som').textContent = `pico na janela · rms ${rms} (o z-score usa o rms)`;
+  saidas(rele, !alerta, alerta, alerta, ['AQUECENDO', 'CALIBRANDO', 'SUSPEITA'].includes(estado));
+  $('s-saidas').textContent = alerta ? 'ALERTA travado: relé aberto, LED vermelho e buzzer (só o reset rearma)'
+    : estado === 'SUSPEITA' ? 'SUSPEITA: relé aberto (calibrou sem motor girando)'
+    : 'relé fechado · LED verde ' + (estado === 'NORMAL' ? 'aceso' : 'piscando');
+  $('estado').textContent = `janela ${jan} · ${estado} · score ${score}`;
+  $('estado').style.color = alerta ? '#e24b4a' : estado === 'NORMAL' ? '#3fbf6a' : estado === 'SUSPEITA' ? '#f5c27a' : '';
+}
+
+// ---- diagnóstico: L,t,d2,d3,b2,b3,a0min,a0max,a0med,rele,led4,led5,buz (20 por segundo) ----
+const janela = { rpm: [], vib: [] };
+const detVisto = {};                               // pino -> último t em que mexeu
+const detLog = {};                                 // pino -> último t registrado no log
+function detector(campo, t, ao) {
+  if (campo && campo !== '-') for (const pino of campo.split('.')) {
+    detVisto[pino] = t;
+    if (!detLog[pino] || t - detLog[pino] > 3000) { detLog[pino] = t; registra(`detector: sinal no pino D${pino} (fora de D2/D3)`, t); }
+  }
+  if (!ao) return;
+  const ativos = Object.keys(detVisto).filter(k => t - detVisto[k] < 2000).map(k => 'D' + k);
+  $('detector').textContent = 'detector de pinos: ' + (ativos.length ? ativos.join(' ') : '—');
+  $('detector').style.color = ativos.length ? '#ef9f27' : '';
+  $('detector').style.borderColor = ativos.length ? '#ef9f27' : '';
+}
+function processaDiag(linha, t, ao) {
+  setModo('diag');
+  detector(linha.split(',')[13], t, ao);
+  const p = linha.split(',').map(Number);
+  const [, , d2, d3, b2, b3, amin, amax, amed, rele, led4, led5, buz] = p;
+  const amp = amax - amin;
+  push('rpm', b2); push('vib', b3); push('som', amp);
+  marca('rpm', b2 > 0, t); marca('vib', b3 > 0, t); marca('som', amp > 60, t);
+  tlPush({ t, d: 50, rpm: b2 > 0, vib: b3 > 0, som: amp > 60, rele: rele === 1, l4: led4 === 1, l5: led5 === 1, buz: buz === 1, estado: 'DIAG' });
+  for (const [k, v] of [['rpm', b2], ['vib', b3]]) {
+    janela[k].push([t, v]); while (janela[k].length && t - janela[k][0][0] > 1000) janela[k].shift();
+  }
+  total.rpm += b2; total.vib += b3;                  // conta também o histórico recuperado
+  if (!ao) return;
+  const soma = k => janela[k].reduce((a, x) => a + x[1], 0);
+  const ha = k => ultAtiv[k] ? Math.round((t - ultAtiv[k]) / 1000) + ' s' : 'nunca';
+  $('v-rpm').textContent = soma('rpm'); $('s-rpm').textContent = `bordas/s · total ${total.rpm} · última há ${ha('rpm')} · D2 = ${d2}`;
+  $('v-vib').textContent = soma('vib'); $('s-vib').textContent = `bordas/s · total ${total.vib} · última há ${ha('vib')} · D3 = ${d3}`;
+  $('v-som').textContent = amp; $('s-som').textContent = `amplitude em 50 ms · nível médio ${amed}/1023 (ideal ≈ 500)`;
+  if (p.length >= 13) { saidas(rele, led4, led5, buz, false); $('s-saidas').textContent = 'nível real dos pinos (lido do Mega)'; }
+  $('estado').style.color = ''; $('estado').textContent = 'diagnóstico · 20 leituras/s';
+}
+
+function registra(texto, t) {
+  const classe = /^>/.test(texto) ? 'cmd' : /ALERTA/.test(texto) ? 'alerta' : /SUSPEITA/.test(texto) ? 'suspeita' : /PASS|calibrado/.test(texto) ? 'ok' : '';
+  marcas.push({ t, texto, classe }); if (marcas.length > 2000) marcas.shift();
+  const li = document.createElement('li');
+  li.textContent = new Date(t).toLocaleTimeString('pt-BR') + '  ' + texto;
+  li.className = classe;
+  const ul = $('log'); ul.prepend(li); while (ul.children.length > 200) ul.lastChild.remove();
+}
+
+function processa(linha, t, ao = true) {
+  ultimoT = Math.max(ultimoT, t);
+  if (/^(#|==|AUTO-TESTE|>)/.test(linha)) return registra(linha, t);
+  const m = RE_M7.exec(linha);
+  if (m) return processaM7(m, t, ao);
+  if (linha.startsWith('L,')) return processaDiag(linha, t, ao);
+}
+
+// ---- desenho ----
+function prepara(c) {
+  const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  return [g, w, h];
+}
+function desenha(k) {
+  const [g, w, h] = prepara($('g-' + k));
+  g.strokeStyle = '#2a2e38'; g.beginPath(); g.moveTo(0, h - 0.5); g.lineTo(w, h - 0.5); g.stroke();
+  const s = series[k]; if (!s.length) return;
+  const piso = modo === 'm7' ? { rpm: 600, vib: 10, som: 20 }[k] : { rpm: 4, vib: 4, som: 100 }[k];
+  const max = Math.max(piso, ...s), bw = w / N;
+  g.fillStyle = cor[k];
+  s.forEach((v, i) => { const bh = (v / max) * (h - 4); g.fillRect((N - s.length + i) * bw, h - bh, Math.max(1, bw), bh); });
+}
+const LINHAS = [
+  ['Rotação', r => r.rpm, '#378add'], ['Vibração', r => r.vib, '#7f77dd'], ['Som', r => r.som, '#1d9e75'],
+  ['Relé B', r => r.rele, '#ef9f27'], ['LED verde', r => r.l4, '#3fbf6a'], ['LED verm.', r => r.l5, '#e24b4a'], ['Buzzer', r => r.buz, '#f5c27a'],
+];
+const COR_ESTADO = { AQUECENDO: '#4a4f5c', CALIBRANDO: '#378add', NORMAL: '#3fbf6a', SUSPEITA: '#ba7517', ALERTA: '#e24b4a', DIAG: '#5a5f6c' };
+function desenhaTl() {
+  const [g, w, h] = prepara($('tl'));
+  const esq = 78, top = 6, alt = (h - top - 22) / (LINHAS.length + 1);
+  const fim = Math.max(ultimoT, Date.now() - 200), ini = fim - janelaTl;
+  const x = t => esq + ((t - ini) / janelaTl) * (w - esq);
+  g.font = '12px -apple-system, sans-serif'; g.textBaseline = 'middle';
+  // grade de tempo
+  const passo = janelaTl <= 60000 ? 10000 : janelaTl <= 300000 ? 60000 : janelaTl <= 900000 ? 120000 : 600000;
+  g.strokeStyle = '#22262f'; g.fillStyle = '#8a8f98';
+  for (let t = Math.ceil(ini / passo) * passo; t <= fim; t += passo) {
+    g.beginPath(); g.moveTo(x(t), top); g.lineTo(x(t), h - 18); g.stroke();
+    g.fillText(new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: janelaTl <= 60000 ? '2-digit' : undefined }), x(t) - 18, h - 8);
+  }
+  const rotulos = [...LINHAS.map(l => l[0]), 'Estado'];
+  rotulos.forEach((r, i) => { g.fillStyle = '#8a8f98'; g.fillText(r, 4, top + alt * i + alt / 2); });
+  // primeiro ponto visível (busca binária)
+  let lo = 0, hi = tl.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (tl[m].t < ini) lo = m + 1; else hi = m; }
+  for (let j = Math.max(0, lo - 1); j < tl.length; j++) {
+    const r = tl[j], x0 = x(r.t - r.d), x1 = Math.max(x0 + 1, x(r.t));
+    LINHAS.forEach(([, f, c], i) => {
+      if (!f(r)) return;
+      const minimo = i < 3 ? 3 : 1;                 // sensores: traço de no mínimo 3 px, para uma batida curta aparecer
+      g.fillStyle = c; g.fillRect(x0, top + alt * i + 3, Math.max(minimo, x1 - x0), alt - 6);
+    });
+    g.fillStyle = COR_ESTADO[r.estado] || '#4a4f5c'; g.fillRect(x0, top + alt * LINHAS.length + 3, x1 - x0, alt - 6);
+  }
+  // mensagens do Mega e comandos: traços verticais
+  for (const mk of marcas) {
+    if (mk.t < ini) continue;
+    g.strokeStyle = mk.classe === 'alerta' ? '#e24b4a' : mk.classe === 'suspeita' ? '#f5c27a' : mk.classe === 'ok' ? '#3fbf6a' : mk.classe === 'cmd' ? '#9fc7f0' : '#8a8f98';
+    g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x(mk.t), top); g.lineTo(x(mk.t), h - 18); g.stroke(); g.setLineDash([]);
+  }
+}
+function quadro() {
+  ['rpm', 'vib', 'som'].forEach(k => { desenha(k); $('c-' + k).classList.toggle('ativo', Date.now() - ultAtiv[k] < 1500); });
+  desenhaTl();
+  requestAnimationFrame(quadro);
+}
+
+document.querySelectorAll('[data-jan]').forEach(b => b.onclick = () => {
+  janelaTl = +b.dataset.jan;
+  document.querySelectorAll('[data-jan]').forEach(x => x.classList.toggle('sel', x === b));
+});
+
+async function comando(c, botao, ms) {
+  botao.disabled = true;
+  try { const r = await fetch('/comando', { method: 'POST', body: c }); if (!r.ok) throw new Error('HTTP ' + r.status); }
+  catch (e) { registra('falha ao enviar o comando ' + c + ': ' + e.message, Date.now()); }
+  setTimeout(() => { botao.disabled = modo !== 'diag'; }, ms);
+}
+$('testar').onclick = () => comando('T', $('testar'), 3200);
+$('tom').onclick = () => comando('P', $('tom'), 1200);
+$('testar').disabled = $('tom').disabled = true;
+
+async function sessao() {
+  try {
+    const s = await (await fetch('/sessao')).json();
+    $('s-sessao').textContent = `sessão gravada: ${s.arquivo ? s.arquivo.split('/').slice(-3).join('/') : '—'} · ${s.linhas} linhas`;
+    const n = tl.length;
+    $('s-tl').textContent = `${n} pontos no navegador · desde ${s.inicio ? new Date(s.inicio).toLocaleTimeString('pt-BR') : '—'} · traços verticais = mensagens do Mega e comandos`;
+  } catch (e) { /* ponte fora */ }
+}
+
+// ---- partida: recupera o histórico (até 60 min) e depois entra no ao vivo ----
+async function inicia() {
+  try {
+    const hist = await (await fetch('/historico?desde=' + (Date.now() - 3600000) + '&max=60000')).json();
+    hist.forEach(([t, linha], i) => processa(linha, t, i === hist.length - 1));
+  } catch (e) { /* sem histórico: segue ao vivo */ }
+  const es = new EventSource('/eventos');
+  es.onopen = () => { if (!modo) $('estado').textContent = 'conectado · aguardando dados do Mega…'; };
+  es.onerror = () => { $('estado').textContent = 'sem conexão com a ponte (ponte.py está rodando?)'; $('estado').style.color = '#e24b4a'; };
+  es.onmessage = e => {
+    const i = e.data.indexOf('|');
+    const t = +e.data.slice(0, i), linha = e.data.slice(i + 1);
+    if (t < ultimoT) return;                                  // já veio pelo histórico
+    ultimaLinha = Date.now(); processa(linha, t);
+  };
+  setInterval(() => {
+    const lim = modo === 'm7' ? 2500 : 1500;
+    if (ultimaLinha && Date.now() - ultimaLinha > lim) {
+      $('estado').textContent = 'sem dados do Mega há ' + Math.round((Date.now() - ultimaLinha) / 1000) + ' s (USB? firmware gravando?)';
+      $('estado').style.color = '#e24b4a';
+    }
+  }, 500);
+  sessao(); setInterval(sessao, 5000);
+  requestAnimationFrame(quadro);
+}
+inicia();
+</script>
+</body>
+</html>

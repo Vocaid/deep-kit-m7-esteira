@@ -1,0 +1,11 @@
+{
+  "name": "Esteira M7 (AK280 + KY-010 + KY-037 + KY-002)",
+  "author": "VOCAID DEEP",
+  "pins": ["VCC", "GND", "PWR", "SOM", "VIB", "OPT"],
+  "controls": [
+    { "id": "atrito", "label": "Atrito no aro (%) [a]", "type": "range", "min": 0, "max": 100, "step": 1 },
+    { "id": "microfone_tampado", "label": "Microfone tampado (0/1) [m]", "type": "range", "min": 0, "max": 1, "step": 1 },
+    { "id": "aleta_solta", "label": "Aleta solta (0/1) [p]", "type": "range", "min": 0, "max": 1, "step": 1 },
+    { "id": "ruido_sala", "label": "Ruido da sala (%) [r]", "type": "range", "min": 0, "max": 100, "step": 1 }
+  ]
+}
